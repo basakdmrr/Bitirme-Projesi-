@@ -1,13 +1,12 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
-import 'package:record/record.dart';
-
-import '../widgets/bg.dart';
 import 'analyzing_screen.dart';
-
+import '../services/auth_service.dart';
+import '../widgets/bg.dart';
 class RecordScreen extends StatefulWidget {
   const RecordScreen({super.key});
 
@@ -19,21 +18,21 @@ class _RecordScreenState extends State<RecordScreen> {
   final AudioRecorder _recorder = AudioRecorder();
 
   static const int totalSeconds = 10;
-
-  bool recording = false;
   int sec = 0;
-  Timer? t;
+  bool recording = false;
 
+  Timer? _timer;
   String? audioPath;
   String? error;
 
   @override
   void dispose() {
-    t?.cancel();
+    _timer?.cancel();
     _recorder.dispose();
     super.dispose();
   }
 
+  // WAV dosya yolu oluştur
   Future<String> _createWavPath() async {
     final dir = await getApplicationDocumentsDirectory();
     return p.join(
@@ -42,12 +41,15 @@ class _RecordScreenState extends State<RecordScreen> {
     );
   }
 
-  Future<void> _start() async {
+  // Kayıdı başlat
+  Future<void> _startRecording() async {
     try {
-      setState(() => error = null);
+      setState(() {
+        error = null;
+      });
 
-      final micStatus = await Permission.microphone.request();
-      if (!micStatus.isGranted) {
+      final mic = await Permission.microphone.request();
+      if (!mic.isGranted) {
         setState(() => error = "Mikrofon izni verilmedi.");
         return;
       }
@@ -64,53 +66,63 @@ class _RecordScreenState extends State<RecordScreen> {
         path: path,
       );
 
-      audioPath = path;
-      recording = true;
-      sec = 0;
+      setState(() {
+        recording = true;
+        sec = 0;
+        audioPath = path;
+      });
 
-      t?.cancel();
-      t = Timer.periodic(const Duration(seconds: 1), (_) async {
+      _timer?.cancel();
+      _timer = Timer.periodic(const Duration(seconds: 1), (_) {
         if (!mounted) return;
 
         setState(() => sec++);
 
         if (sec >= totalSeconds) {
-          await _stopAndGoAnalyze();
+          _stopAndAnalyze();
         }
       });
-
-      setState(() {});
     } catch (e) {
       setState(() => error = "Kayıt başlatılamadı: $e");
     }
   }
 
-  Future<void> _stopAndGoAnalyze() async {
-    try {
-      t?.cancel();
+  // Kayıdı durdur ve analize geç
+  Future<void> _stopAndAnalyze() async {
+  try {
+    _timer?.cancel();
+    await _recorder.stop();
 
-      if (recording) {
-        await _recorder.stop();
-        recording = false;
-      }
+    setState(() {
+      recording = false;
+    });
 
-      if (!mounted) return;
+    if (!mounted || audioPath == null) return;
 
-      if (audioPath == null) {
-        setState(() => error = "Ses dosyası oluşmadı.");
-        return;
-      }
+    /// 🔐 TOKEN AL
+    final tokenObj = AuthService.token;
 
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => AnalyzingScreen(audioPath: audioPath!),
-        ),
-      );
-    } catch (e) {
-      setState(() => error = "Kayıt durdurulamadı: $e");
+    if (tokenObj == null) {
+      setState(() {
+        error = "Oturum bulunamadı. Lütfen tekrar giriş yapın.";
+      });
+      return;
     }
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AnalyzingScreen(
+          audioPath: audioPath!,
+          token: tokenObj.accessToken,
+        ),
+      ),
+    );
+  } catch (e) {
+    setState(() => error = "Kayıt durdurulamadı: $e");
   }
+}
+
 
   @override
   Widget build(BuildContext context) {
@@ -123,28 +135,35 @@ class _RecordScreenState extends State<RecordScreen> {
             padding: const EdgeInsets.all(18),
             child: Column(
               children: [
+                // ÜST BAR
                 Row(
                   children: [
                     IconButton(
-                      onPressed: () => Navigator.pop(context),
+                      onPressed: recording ? null : () => Navigator.pop(context),
                       icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
                     ),
                     const Spacer(),
                     const Text(
-                      "Kayıt",
+                      "Ses Kaydı",
                       style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
                     ),
                     const Spacer(),
                     const SizedBox(width: 48),
                   ],
                 ),
+
                 const Spacer(),
+
+                // ANA İKON
                 Icon(
                   recording ? Icons.graphic_eq_rounded : Icons.mic_none_rounded,
                   size: 120,
                   color: Colors.white,
                 ),
-                const SizedBox(height: 14),
+
+                const SizedBox(height: 16),
+
+                // AÇIKLAMA
                 Text(
                   recording
                       ? "Lütfen nefes verin...\nKayıt alınıyor."
@@ -153,10 +172,13 @@ class _RecordScreenState extends State<RecordScreen> {
                   style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w700,
-                    height: 1.2,
+                    height: 1.3,
                   ),
                 ),
+
                 const SizedBox(height: 14),
+
+                // SÜRE
                 Text(
                   "$sec / $totalSeconds sn",
                   style: const TextStyle(
@@ -165,7 +187,10 @@ class _RecordScreenState extends State<RecordScreen> {
                     fontSize: 18,
                   ),
                 ),
+
                 const SizedBox(height: 10),
+
+                // PROGRESS BAR
                 ClipRRect(
                   borderRadius: BorderRadius.circular(999),
                   child: LinearProgressIndicator(
@@ -175,7 +200,10 @@ class _RecordScreenState extends State<RecordScreen> {
                     valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
                   ),
                 ),
+
                 const SizedBox(height: 14),
+
+                // HATA
                 if (error != null)
                   Text(
                     error!,
@@ -185,7 +213,10 @@ class _RecordScreenState extends State<RecordScreen> {
                       fontWeight: FontWeight.w800,
                     ),
                   ),
+
                 const Spacer(),
+
+                // ANA BUTON
                 SizedBox(
                   width: double.infinity,
                   height: 54,
@@ -197,9 +228,9 @@ class _RecordScreenState extends State<RecordScreen> {
                         borderRadius: BorderRadius.circular(16),
                       ),
                     ),
-                    onPressed: recording ? _stopAndGoAnalyze : _start,
+                    onPressed: recording ? _stopAndAnalyze : _startRecording,
                     child: Text(
-                      recording ? "Kaydı Bitir & Analiz Et" : "Kaydı Başlat",
+                      recording ? "Kaydı Bitir" : "Kaydı Başlat",
                       style: const TextStyle(fontWeight: FontWeight.w900),
                     ),
                   ),
