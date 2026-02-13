@@ -1,160 +1,160 @@
 import 'package:flutter/material.dart';
-
-import '../widgets/bg.dart';
-import '../database/db_helper.dart';
-import '../models/analysis_record.dart';
-import '../screens/result_screen.dart';
-
+import '../services/history_service.dart';
+import '../db/db_helper.dart';
+import 'result_screen.dart';
 class HistoryScreen extends StatefulWidget {
-  const HistoryScreen({super.key});
+  final String token;
+  
+  const HistoryScreen({super.key, required this.token});
 
   @override
   State<HistoryScreen> createState() => _HistoryScreenState();
 }
 
 class _HistoryScreenState extends State<HistoryScreen> {
-  List<AnalysisRecord> items = [];
-  bool loading = true;
+  List<AnalysisRecord> _records = [];
+  bool _isLoading = true;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    _loadRecords();
   }
 
-  Future<void> _load() async {
-    final list = await DbHelper.instance.getRecords();
-    if (!mounted) return;
+  Future<void> _loadRecords() async {
     setState(() {
-      items = list;
-      loading = false;
+      _isLoading = true;
+      _error = null;
     });
-  }
 
-  Future<void> _clearAll() async {
-    await DbHelper.instance.clearAll();
-    await _load();
+    try {
+      // Önce lokal veritabanından çek
+      final localRecords = await DbHelper.instance.getRecords();
+      
+      setState(() {
+        _records = localRecords;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          "Analiz Geçmişi",
-          style: TextStyle(fontWeight: FontWeight.w900),
-        ),
-        actions: [
-          IconButton(
-            onPressed: _clearAll,
-            icon: const Icon(Icons.delete_forever_rounded),
-            tooltip: "Tüm kayıtları sil",
-          ),
-        ],
+        title: const Text('Geçmiş Analizler'),
+        backgroundColor: const Color(0xFF0B4A7A),
+        foregroundColor: Colors.white,
       ),
-      body: Bg(
-        light: true,
-        child: loading
-            ? const Center(child: CircularProgressIndicator())
-            : items.isEmpty
-                ? const Center(
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFF0B4A7A),
+              Color(0xFF1565C0),
+            ],
+          ),
+        ),
+        child: _isLoading
+            ? const Center(
+                child: CircularProgressIndicator(color: Colors.white),
+              )
+            : _error != null
+                ? Center(
                     child: Text(
-                      "Kayıt yok",
-                      style: TextStyle(fontWeight: FontWeight.w900),
+                      'Hata: $_error',
+                      style: const TextStyle(color: Colors.white),
                     ),
                   )
-                : ListView.separated(
-                    padding: const EdgeInsets.all(18),
-                    itemCount: items.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 12),
-                    itemBuilder: (_, i) {
-                      final r = items[i];
-
-                      final date = r.createdAtIso.length >= 19
-                          ? r.createdAtIso
-                              .substring(0, 19)
-                              .replaceAll('T', ' ')
-                          : r.createdAtIso;
-
-                      final percent = (r.confidence * 100).round();
-
-                      final color =
-                          r.label.toLowerCase().contains("healthy") ||
-                                  r.label.toLowerCase().contains("sağ")
-                              ? const Color(0xFF10B981)
-                              : const Color(0xFFF59E0B);
-
-                      return InkWell(
-                        borderRadius: BorderRadius.circular(16),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => ResultScreen(
-                                result: r.label,
-                                confidence: r.confidence,
-                                audioPath: r.audioPath,
-                                createdAtIso: r.createdAtIso,
-                                fromHistory: true,
-                              ),
-                            ),
-                          );
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 12,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.90),
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: [
-                              BoxShadow(
-                                blurRadius: 14,
-                                offset: const Offset(0, 8),
-                                color: Colors.black.withOpacity(0.08),
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            children: [
-                              CircleAvatar(
-                                backgroundColor: color.withOpacity(0.15),
-                                child: Icon(
-                                  Icons.monitor_heart_rounded,
-                                  color: color,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      date,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w900,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      "${r.label}  •  %$percent",
-                                      style: TextStyle(
-                                        color: color,
-                                        fontWeight: FontWeight.w900,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const Icon(Icons.chevron_right_rounded),
-                            ],
+                : _records.isEmpty
+                    ? const Center(
+                        child: Text(
+                          'Henüz kayıt yok',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
                           ),
                         ),
-                      );
-                    },
-                  ),
+                      )
+                    : RefreshIndicator(
+                        onRefresh: _loadRecords,
+                        child: ListView.builder(
+                          padding: const EdgeInsets.all(16),
+                          itemCount: _records.length,
+                          itemBuilder: (context, index) {
+                            final record = _records[index];
+                            return _RecordCard(record: record);
+                          },
+                        ),
+                      ),
       ),
     );
+  }
+}
+
+class _RecordCard extends StatelessWidget {
+  final AnalysisRecord record;
+  
+  const _RecordCard({required this.record});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: const Color(0xFF0B4A7A),
+          child: Text(
+            '${(record.confidence * 100).toInt()}%',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        title: Text(
+          record.label,
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        subtitle: Text(
+          _formatDate(record.createdAtIso),
+          style: TextStyle(color: Colors.grey[600]),
+        ),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () {
+          // ResultScreen'e git
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ResultScreen(
+                result: record.label,
+                confidence: record.confidence,
+                audioPath: record.audioPath,
+                createdAtIso: record.createdAtIso,
+                fromHistory: true,
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  String _formatDate(String isoDate) {
+    try {
+      final date = DateTime.parse(isoDate);
+      return '${date.day}.${date.month}.${date.year} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
+    } catch (e) {
+      return isoDate;
+    }
   }
 }
