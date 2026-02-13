@@ -1,9 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../widgets/bg.dart';
-import '../screens/history_screen.dart';
-import '../screens/role_select_screen.dart';
-
 class ResultScreen extends StatelessWidget {
   final String result;
   final double confidence;
@@ -17,158 +13,179 @@ class ResultScreen extends StatelessWidget {
     required this.confidence,
     required this.audioPath,
     required this.createdAtIso,
-    required this.fromHistory,
+    this.fromHistory = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    final percent = (confidence * 100).round();
-
-    final ok =
-        result.toLowerCase().contains("healthy") ||
-        result.toLowerCase().contains("sağ");
-
-    final safeDate = createdAtIso.length >= 19
-        ? createdAtIso.substring(0, 19).replaceAll('T', ' ')
-        : createdAtIso;
-
     return Scaffold(
-      body: Bg(
-        light: true,
+      appBar: AppBar(
+        title: const Text('Tahmin Sonucu'),
+        backgroundColor: const Color(0xFF0B4A7A),
+        foregroundColor: Colors.white,
+      ),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFF0B4A7A),
+              Color(0xFF1565C0),
+            ],
+          ),
+        ),
         child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(18),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    IconButton(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.arrow_back_rounded),
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // Sonuç ikonu
+                  Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      shape: BoxShape.circle,
                     ),
-                    const Spacer(),
-                    const Text(
-                      "Sonuç",
-                      style: TextStyle(
-                        fontWeight: FontWeight.w900,
-                        fontSize: 18,
+                    child: const Icon(
+                      Icons.check_circle_outline,
+                      size: 80,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  
+                  // Tahmin başlığı
+                  const Text(
+                    'Tahmin Sonucu',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white70,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  // Tahmin değeri
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 32,
+                      vertical: 16,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Text(
+                      result,
+                      style: const TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF0B4A7A),
                       ),
+                      textAlign: TextAlign.center,
                     ),
-                    const Spacer(),
-                    IconButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const HistoryScreen(),
+                  ),
+                  const SizedBox(height: 24),
+                  
+                  // Güven oranı
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      children: [
+                        const Text(
+                          'Güven Oranı',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.white70,
                           ),
-                        );
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '${(confidence * 100).toStringAsFixed(1)}%',
+                          style: const TextStyle(
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: LinearProgressIndicator(
+                            value: confidence,
+                            minHeight: 8,
+                            backgroundColor: Colors.white.withOpacity(0.3),
+                            valueColor: const AlwaysStoppedAnimation<Color>(
+                              Colors.white,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  // Tarih bilgisi
+                  Text(
+                    'Analiz Tarihi: ${_formatDate(createdAtIso)}',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Colors.white60,
+                    ),
+                  ),
+                  const SizedBox(height: 40),
+                  
+                  // Geri dön butonu
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: const Color(0xFF0B4A7A),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      onPressed: () {
+                        if (fromHistory) {
+                          Navigator.pop(context);
+                        } else {
+                          // Ana sayfaya dön (tüm sayfaları temizle)
+                          Navigator.of(context).popUntil((route) => route.isFirst);
+                        }
                       },
-                      icon: const Icon(Icons.history_rounded),
-                    ),
-                  ],
-                ),
-                const Spacer(),
-                CircleAvatar(
-                  radius: 46,
-                  backgroundColor:
-                      ok ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
-                  child: Icon(
-                    ok ? Icons.check_rounded : Icons.warning_rounded,
-                    color: Colors.white,
-                    size: 56,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                Text(
-                  "Tahmin: $result",
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  "Güven Skoru: %$percent",
-                  style: TextStyle(
-                    color: Colors.black.withOpacity(0.65),
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  "Tarih: $safeDate",
-                  style: TextStyle(
-                    color: Colors.black.withOpacity(0.55),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                SizedBox(
-                  width: double.infinity,
-                  height: 54,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0EA5E9),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
+                      child: Text(
+                        fromHistory ? 'Geri Dön' : 'Ana Sayfaya Dön',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 16,
+                        ),
                       ),
                     ),
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const HistoryScreen(),
-                        ),
-                      );
-                    },
-                    child: const Text(
-                      "Analiz Geçmişi",
-                      style: TextStyle(fontWeight: FontWeight.w900),
-                    ),
                   ),
-                ),
-                const SizedBox(height: 10),
-                SizedBox(
-                  width: double.infinity,
-                  height: 54,
-                  child: OutlinedButton(
-                    style: OutlinedButton.styleFrom(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                    ),
-                    onPressed: () {
-                      Navigator.pushAndRemoveUntil(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const RoleSelectScreen(),
-                        ),
-                        (_) => false,
-                      );
-                    },
-                    child: const Text(
-                      "Başa Dön",
-                      style: TextStyle(fontWeight: FontWeight.w900),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  "Not: Bu bir ön değerlendirmedir, kesin tanı için hekime başvurun.",
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.black.withOpacity(0.55),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const Spacer(),
-              ],
+                ],
+              ),
             ),
           ),
         ),
       ),
     );
+  }
+
+  String _formatDate(String isoDate) {
+    try {
+      final date = DateTime.parse(isoDate);
+      return '${date.day}.${date.month}.${date.year} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
+    } catch (e) {
+      return isoDate;
+    }
   }
 }
